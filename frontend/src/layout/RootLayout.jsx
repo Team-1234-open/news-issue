@@ -1,8 +1,11 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, Link } from 'react-router-dom'
 
 const RootLayout = () => {
   return (
-    <div>
+    <div className='h-screen'>
+      <Link to="/" className='flex items-center p-5 text-lg cursor-pointer'>
+        Home
+      </Link>
       <Outlet />
     </div>
   )
