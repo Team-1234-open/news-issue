@@ -1,4 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import RootLayout from './layout/RootLayout';
 import HomePage from './pages/home/HomePage';
 import NewsListPage from './pages/news_list/NewsListPage';
@@ -22,12 +24,14 @@ const routes = [
 ];
 
 const router = createBrowserRouter(routes);
+const queryClient = new QueryClient();
 
 const App = () => {
   return (
-    <div>
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
-    </div>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   )
 }
 
