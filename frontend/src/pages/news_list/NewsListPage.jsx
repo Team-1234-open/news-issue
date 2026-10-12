@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { useGetNaverNews } from '../../hooks/useGetNaverNews'
 
+// 최대 페이지
 const PAGE_SIZE = 10
 
+// HTML 태그 제거
 const toPlainText = (value) => {
   const document = new DOMParser().parseFromString(value ?? '', 'text/html')
   document.querySelectorAll('script, style').forEach((element) => element.remove())
   return document.body.textContent.trim()
 }
 
+// 발행일 숫자 변환
 const formatPublishedDate = (value) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('ko-KR')
@@ -27,10 +30,12 @@ const NewsListPage = () => {
     <main className="px-5 py-8 sm:px-8">
       <div className="mx-auto max-w-4xl">
         <h1 className="text-2xl font-bold text-gray-900">뉴스 목록</h1>
-
+        
         {isPending ? (
+          // 로딩 중
           <p role="status" className="mt-6 text-gray-600">뉴스를 불러오는 중입니다.</p>
         ) : isError ? (
+          // 에러 발생 시
           <div role="alert" className="mt-6">
             <p className="text-red-700">뉴스를 불러오지 못했습니다.</p>
             <button
@@ -43,8 +48,10 @@ const NewsListPage = () => {
             </button>
           </div>
         ) : newsItems.length === 0 ? (
+          // 뉴스가 없는 경우
           <p role="status" className="mt-6 text-gray-600">표시할 뉴스가 없습니다.</p>
         ) : (
+          // 정상적으로 뉴스를 불러왔을 경우
           <>
             <p className="mt-2 text-sm text-gray-600" role="status">
               총 {newsItems.length}개 · {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, newsItems.length)}번째 뉴스
