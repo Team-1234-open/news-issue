@@ -28,6 +28,7 @@ const routes = [
 const router = createBrowserRouter(routes);
 const queryClient = new QueryClient();
 
+// 프로젝트 처음 로드 시, 네이버 뉴스 검색 api 호출(최초만)
 const NaverNewsBootstrap = () => {
   const {data, isSuccess, isError, error } = useGetNaverNews();
 
