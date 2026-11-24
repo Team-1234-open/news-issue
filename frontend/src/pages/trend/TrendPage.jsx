@@ -1,7 +1,9 @@
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import useSearchHistory from '../../hooks/useSearchHistory'
 import { useSearchNaverNews } from '../../hooks/useSearchNaverNews'
+import { useGetNaverNews } from '../../hooks/useGetNaverNews'
+import { analyzeNewsKeywords } from '../../utils/analyzeNewsKeywords'
 
 const TrendPage = () => {
   const [keyword, setKeyword] = useState('')
@@ -15,18 +17,56 @@ const TrendPage = () => {
     error,
   } = useSearchNaverNews(searchedKeyword)
 
-  // 검색 결과 목록
   const searchResults = searchData?.items ?? []
 
-  // 최근 조회 및 즐겨찾기 관리
+  // 전체 뉴스 데이터 가져오기
+  const {
+    data: allNewsData,
+    isLoading: isAllNewsLoading,
+    isError: isAllNewsError,
+  } = useGetNaverNews()
+
+  const allNews = Array.isArray(allNewsData)
+    ? allNewsData
+    : allNewsData?.items ?? []
+
+  // 전체 뉴스 주요 키워드 TOP 5
+  const topKeywords = useMemo(
+    () => analyzeNewsKeywords(allNews),
+    [allNews],
+  )
+
+  // 검색 기록 및 즐겨찾기 관리
   const {
     recentSearches,
     favorites,
+    searchLogs,
     addRecentSearch,
     toggleFavorite,
     clearRecentSearches,
     removeRecentSearch,
   } = useSearchHistory()
+
+  // 검색어별 검색 횟수 계산
+  const searchKeywordStats = Object.values(
+    searchLogs.reduce((acc, log) => {
+      const keyword = log.keyword
+      const normalizedKeyword = keyword.toLowerCase()
+
+      if (!acc[normalizedKeyword]) {
+        acc[normalizedKeyword] = {
+          keyword,
+          count: 0,
+        }
+      }
+
+      acc[normalizedKeyword].count += 1
+
+      return acc
+    }, {}),
+  )
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
 
   // 검색 실행
   const handleSearch = (searchKeyword = keyword) => {
@@ -241,14 +281,133 @@ const TrendPage = () => {
         )}
       </section>
 
-      {/* 트렌드 그래프 */}
-      <section className="mt-10 rounded-lg border border-dashed border-gray-300 p-6">
-        <h2 className="font-bold text-gray-800">
-          검색 트렌드 그래프
-        </h2>
+      {/* 전체 뉴스 키워드 그래프 */}
+      <section className="mt-10 rounded-xl border border-gray-200 bg-white p-6">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">
+            전체 뉴스 키워드 TOP 5
+          </h2>
 
-        <p className="mt-2 text-sm text-gray-500">
-          실제 트렌드 그래프는 데이터 API 연결 후 구현할 예정입니다.
+          <p className="mt-2 text-sm text-gray-500">
+            전체 뉴스의 제목과 설명을 분석한 주요 키워드입니다.
+          </p>
+        </div>
+
+        {isAllNewsLoading && (
+          <p className="mt-6 rounded-lg bg-gray-50 p-5 text-sm text-gray-500">
+            뉴스 데이터를 분석하고 있습니다...
+          </p>
+        )}
+
+        {isAllNewsError && (
+          <p className="mt-6 rounded-lg bg-red-50 p-5 text-sm text-red-600">
+            뉴스 데이터를 불러오지 못했습니다.
+          </p>
+        )}
+
+        {!isAllNewsLoading &&
+          !isAllNewsError &&
+          topKeywords.length === 0 && (
+            <p className="mt-6 rounded-lg bg-gray-50 p-5 text-sm text-gray-500">
+              분석할 키워드가 없습니다.
+            </p>
+          )}
+
+        {!isAllNewsLoading &&
+          !isAllNewsError &&
+          topKeywords.length > 0 && (
+            <div className="mt-8 space-y-6">
+              {topKeywords.map((item, index) => (
+                <div key={item.keyword}>
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-gray-400">
+                        0{index + 1}
+                      </span>
+
+                      <span className="font-semibold text-gray-800">
+                        {item.keyword}
+                      </span>
+                    </div>
+
+                    <span className="text-sm font-semibold text-gray-600">
+                      {item.count}건
+                    </span>
+                  </div>
+
+                  <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                      style={{
+                        width: `${(item.count / topKeywords[0].count) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+        <p className="mt-6 text-xs text-gray-400">
+          ※ 한 뉴스에서 동일 키워드는 한 번만 집계합니다.
+          뉴스 제목과 설명에 등장한 단어의 빈도를 기준으로 합니다.
+        </p>
+      </section>
+
+      {/* 내 검색 기록 그래프 */}
+      <section className="mt-10 rounded-xl border border-gray-200 bg-white p-6">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">
+            내 검색 기록 TOP 5
+          </h2>
+
+          <p className="mt-2 text-sm text-gray-500">
+            내가 자주 검색한 키워드를 횟수별로 보여줍니다.
+          </p>
+        </div>
+
+        {searchKeywordStats.length === 0 ? (
+          <p className="mt-6 rounded-lg bg-gray-50 p-5 text-center text-sm text-gray-500">
+            아직 검색 기록이 없습니다. 검색어를 입력해 보세요!
+          </p>
+        ) : (
+          <div className="mt-8 space-y-6">
+            {searchKeywordStats.map((item, index) => {
+              const percentage =
+                (item.count / searchKeywordStats[0].count) * 100
+
+              return (
+                <div key={item.keyword}>
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-gray-400">
+                        0{index + 1}
+                      </span>
+
+                      <span className="font-semibold text-gray-800">
+                        {item.keyword}
+                      </span>
+                    </div>
+
+                    <span className="text-sm font-semibold text-gray-600">
+                      {item.count}회
+                    </span>
+                  </div>
+
+                  <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className="h-full rounded-full bg-indigo-500 transition-all duration-500"
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <p className="mt-6 text-xs text-gray-400">
+          ※ 검색할 때마다 기록되며, 같은 검색어도 각각 집계됩니다.
         </p>
       </section>
     </main>
