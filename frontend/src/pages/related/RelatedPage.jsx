@@ -85,7 +85,7 @@ const RelatedPage = () => {
                 })}`}
                 className={`rounded-md border px-2 py-1 text-xs ${
                   keyword === rankedKeyword
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    ? 'border-blue-600 bg-blue-600 text-white font-semibold'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
                 }`}
               >
