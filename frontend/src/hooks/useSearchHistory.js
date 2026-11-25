@@ -95,6 +95,15 @@ const useSearchHistory = () => {
     )
   }
 
+  // 검색 통계에서 특정 검색어의 기록 전체 삭제
+  const removeSearchLogs = (keyword) => {
+    setSearchLogs((previous) =>
+      previous.filter(
+        (log) => log.keyword.toLowerCase() !== keyword.toLowerCase(),
+      ),
+    )
+  }
+
   return {
     recentSearches,
     favorites,
@@ -103,6 +112,7 @@ const useSearchHistory = () => {
     toggleFavorite,
     clearRecentSearches,
     removeRecentSearch,
+    removeSearchLogs,
   }
 }
 

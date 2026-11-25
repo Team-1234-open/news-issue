@@ -1,13 +1,15 @@
-
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSearchHistory from '../../hooks/useSearchHistory'
 import { useSearchNaverNews } from '../../hooks/useSearchNaverNews'
 import { useGetNaverNews } from '../../hooks/useGetNaverNews'
 import { analyzeNewsKeywords } from '../../utils/analyzeNewsKeywords'
 
+const EMPTY_NEWS = []
+
 const TrendPage = () => {
   const [keyword, setKeyword] = useState('')
   const [searchedKeyword, setSearchedKeyword] = useState('')
+  const [showAllResults, setShowAllResults] = useState(false)
 
   // 검색 결과 관리
   const {
@@ -19,6 +21,11 @@ const TrendPage = () => {
 
   const searchResults = searchData?.items ?? []
 
+  // 처음에는 뉴스 5개만 표시
+  const displayedSearchResults = showAllResults
+    ? searchResults
+    : searchResults.slice(0, 5)
+
   // 전체 뉴스 데이터 가져오기
   const {
     data: allNewsData,
@@ -28,13 +35,59 @@ const TrendPage = () => {
 
   const allNews = Array.isArray(allNewsData)
     ? allNewsData
-    : allNewsData?.items ?? []
+    : allNewsData?.items ?? EMPTY_NEWS
+
+    console.log('전체 뉴스 API 응답:', allNewsData)
+console.log('분석 대상 뉴스:', allNews)
+console.log('뉴스 개수:', allNews.length)
+console.log(
+  '첫 번째 뉴스:',
+  allNews[0]?.title,
+  allNews[0]?.description,
+)
+
+  // 전체 뉴스 키워드 분석 상태
+  const [topKeywords, setTopKeywords] = useState([])
+  const [isAnalyzingKeywords, setIsAnalyzingKeywords] = useState(false)
 
   // 전체 뉴스 주요 키워드 TOP 5
-  const topKeywords = useMemo(
-    () => analyzeNewsKeywords(allNews),
-    [allNews],
-  )
+  useEffect(() => {
+    let cancelled = false
+
+    const analyzeKeywords = async () => {
+      if (allNews.length === 0) {
+        setTopKeywords([])
+        setIsAnalyzingKeywords(false)
+        return
+      }
+
+      setIsAnalyzingKeywords(true)
+
+      try {
+        const result = await analyzeNewsKeywords(allNews)
+
+        if (!cancelled) {
+          setTopKeywords(result)
+        }
+      } catch (error) {
+        console.error('뉴스 키워드 분석 실패:', error)
+
+        if (!cancelled) {
+          setTopKeywords([])
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAnalyzingKeywords(false)
+        }
+      }
+    }
+
+    analyzeKeywords()
+
+    return () => {
+      cancelled = true
+    }
+  }, [allNews])
 
   // 검색 기록 및 즐겨찾기 관리
   const {
@@ -45,6 +98,7 @@ const TrendPage = () => {
     toggleFavorite,
     clearRecentSearches,
     removeRecentSearch,
+    removeSearchLogs,
   } = useSearchHistory()
 
   // 검색어별 검색 횟수 계산
@@ -68,6 +122,54 @@ const TrendPage = () => {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5)
 
+  // 날짜별 검색량 계산 (최근 7일)
+  const dailySearchStats = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const getDateKey = (date) => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+
+      return `${year}-${month}-${day}`
+    }
+
+    const searchCountByDate = searchLogs.reduce((acc, log) => {
+      const searchedDate = new Date(log.searchedAt)
+
+      if (Number.isNaN(searchedDate.getTime())) {
+        return acc
+      }
+
+      const dateKey = getDateKey(searchedDate)
+      acc[dateKey] = (acc[dateKey] || 0) + 1
+
+      return acc
+    }, {})
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(today)
+      date.setDate(today.getDate() - (6 - index))
+      const dateKey = getDateKey(date)
+
+      return {
+        date: dateKey,
+        label: `${date.getMonth() + 1}/${date.getDate()}`,
+        count: searchCountByDate[dateKey] || 0,
+      }
+    })
+  }, [searchLogs])
+
+  const maxDailySearchCount = Math.max(
+    ...dailySearchStats.map((item) => item.count),
+    1,
+  )
+
+  const hasDailySearchLogs = dailySearchStats.some(
+    (item) => item.count > 0,
+  )
+
   // 검색 실행
   const handleSearch = (searchKeyword = keyword) => {
     const trimmedKeyword = searchKeyword.trim()
@@ -76,6 +178,7 @@ const TrendPage = () => {
 
     addRecentSearch(trimmedKeyword)
     setSearchedKeyword(trimmedKeyword)
+    setShowAllResults(false)
     setKeyword('')
   }
 
@@ -151,28 +254,42 @@ const TrendPage = () => {
           )}
 
           {!isLoading && !isError && searchResults.length > 0 && (
-            <ul className="mt-4 divide-y divide-gray-200 rounded-lg border border-gray-200">
-              {searchResults.map((item, index) => (
-                <li key={item.link || index} className="px-4 py-4">
-                  <a
-                    href={item.link || item.originallink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold text-gray-800 hover:text-blue-600"
-                  >
-                    {cleanText(item.title)}
-                  </a>
+            <>
+              <ul className="mt-4 divide-y divide-gray-200 rounded-lg border border-gray-200">
+                {displayedSearchResults.map((item, index) => (
+                  <li key={item.link || index} className="px-4 py-4">
+                    <a
+                      href={item.link || item.originallink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-gray-800 hover:text-blue-600"
+                    >
+                      {cleanText(item.title)}
+                    </a>
 
-                  <p className="mt-2 text-sm text-gray-600">
-                    {cleanText(item.description)}
-                  </p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      {cleanText(item.description)}
+                    </p>
 
-                  <p className="mt-2 text-xs text-gray-400">
-                    {item.pubDate}
-                  </p>
-                </li>
-              ))}
-            </ul>
+                    <p className="mt-2 text-xs text-gray-400">
+                      {item.pubDate}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+
+              {searchResults.length > 5 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllResults((prev) => !prev)}
+                  className="mt-4 w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  {showAllResults
+                    ? '뉴스 접기'
+                    : `뉴스 ${searchResults.length - 5}개 더 보기`}
+                </button>
+              )}
+            </>
           )}
         </section>
       )}
@@ -293,7 +410,7 @@ const TrendPage = () => {
           </p>
         </div>
 
-        {isAllNewsLoading && (
+        {(isAllNewsLoading || isAnalyzingKeywords) && (
           <p className="mt-6 rounded-lg bg-gray-50 p-5 text-sm text-gray-500">
             뉴스 데이터를 분석하고 있습니다...
           </p>
@@ -307,6 +424,7 @@ const TrendPage = () => {
 
         {!isAllNewsLoading &&
           !isAllNewsError &&
+          !isAnalyzingKeywords &&
           topKeywords.length === 0 && (
             <p className="mt-6 rounded-lg bg-gray-50 p-5 text-sm text-gray-500">
               분석할 키워드가 없습니다.
@@ -315,6 +433,7 @@ const TrendPage = () => {
 
         {!isAllNewsLoading &&
           !isAllNewsError &&
+          !isAnalyzingKeywords &&
           topKeywords.length > 0 && (
             <div className="mt-8 space-y-6">
               {topKeywords.map((item, index) => (
@@ -354,7 +473,7 @@ const TrendPage = () => {
         </p>
       </section>
 
-      {/* 내 검색 기록 그래프 */}
+      {/* 내 검색 기록 TOP 5 */}
       <section className="mt-10 rounded-xl border border-gray-200 bg-white p-6">
         <div>
           <h2 className="text-lg font-bold text-gray-900">
@@ -378,20 +497,31 @@ const TrendPage = () => {
 
               return (
                 <div key={item.keyword}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <span className="text-sm font-bold text-gray-400">
                         0{index + 1}
                       </span>
 
-                      <span className="font-semibold text-gray-800">
+                      <span className="break-words font-semibold text-gray-800">
                         {item.keyword}
                       </span>
                     </div>
 
-                    <span className="text-sm font-semibold text-gray-600">
-                      {item.count}회
-                    </span>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="text-sm font-semibold text-gray-600">
+                        {item.count}회
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => removeSearchLogs(item.keyword)}
+                        aria-label={`${item.keyword} 검색 통계 삭제`}
+                        className="text-sm text-gray-400 hover:text-red-600"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </div>
 
                   <div className="h-3 overflow-hidden rounded-full bg-gray-100">
@@ -408,6 +538,64 @@ const TrendPage = () => {
 
         <p className="mt-6 text-xs text-gray-400">
           ※ 검색할 때마다 기록되며, 같은 검색어도 각각 집계됩니다.
+          삭제 버튼을 누르면 해당 검색어의 통계 기록 전체가 삭제됩니다.
+        </p>
+      </section>
+
+      {/* 날짜별 검색량 그래프 */}
+      <section className="mt-10 rounded-xl border border-gray-200 bg-white p-6">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">
+            날짜별 검색량 변화
+          </h2>
+
+          <p className="mt-2 text-sm text-gray-500">
+            최근 7일 동안의 검색 횟수를 날짜별로 보여줍니다.
+          </p>
+        </div>
+
+        {!hasDailySearchLogs && (
+          <p className="mt-6 rounded-lg bg-gray-50 p-4 text-center text-sm text-gray-500">
+            최근 7일간 검색 기록이 없습니다.
+            검색어를 입력하면 날짜별 검색량이 표시됩니다.
+          </p>
+        )}
+
+        <div className="mt-8 grid grid-cols-7 gap-2">
+          {dailySearchStats.map((item) => {
+            const percentage =
+              (item.count / maxDailySearchCount) * 100
+
+            return (
+              <div
+                key={item.date}
+                className="flex min-w-0 flex-col items-center"
+              >
+                <span className="mb-2 text-xs font-semibold text-gray-600">
+                  {item.count}회
+                </span>
+
+                <div className="flex h-32 w-full items-end justify-center rounded-t-md bg-gray-50">
+                  <div
+                    className="w-full rounded-t-md bg-violet-500 transition-all duration-500"
+                    style={{
+                      height: `${percentage}%`,
+                      minHeight: item.count > 0 ? '4px' : '0px',
+                    }}
+                  />
+                </div>
+
+                <span className="mt-2 text-xs text-gray-500">
+                  {item.label}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+
+        <p className="mt-6 text-xs text-gray-400">
+          ※ 오늘을 포함한 최근 7일의 검색 기록을 집계합니다.
+          검색 기록이 없는 날짜는 0회로 표시됩니다.
         </p>
       </section>
     </main>
