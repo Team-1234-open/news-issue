@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+
+import { useEffect, useState } from 'react'
 import useSearchHistory from '../../hooks/useSearchHistory'
 import { useSearchNaverNews } from '../../hooks/useSearchNaverNews'
 import { useGetNaverNews } from '../../hooks/useGetNaverNews'
@@ -36,15 +37,6 @@ const TrendPage = () => {
   const allNews = Array.isArray(allNewsData)
     ? allNewsData
     : allNewsData?.items ?? EMPTY_NEWS
-
-    console.log('전체 뉴스 API 응답:', allNewsData)
-console.log('분석 대상 뉴스:', allNews)
-console.log('뉴스 개수:', allNews.length)
-console.log(
-  '첫 번째 뉴스:',
-  allNews[0]?.title,
-  allNews[0]?.description,
-)
 
   // 전체 뉴스 키워드 분석 상태
   const [topKeywords, setTopKeywords] = useState([])
@@ -121,54 +113,6 @@ console.log(
   )
     .sort((a, b) => b.count - a.count)
     .slice(0, 5)
-
-  // 날짜별 검색량 계산 (최근 7일)
-  const dailySearchStats = useMemo(() => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    const getDateKey = (date) => {
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-
-      return `${year}-${month}-${day}`
-    }
-
-    const searchCountByDate = searchLogs.reduce((acc, log) => {
-      const searchedDate = new Date(log.searchedAt)
-
-      if (Number.isNaN(searchedDate.getTime())) {
-        return acc
-      }
-
-      const dateKey = getDateKey(searchedDate)
-      acc[dateKey] = (acc[dateKey] || 0) + 1
-
-      return acc
-    }, {})
-
-    return Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(today)
-      date.setDate(today.getDate() - (6 - index))
-      const dateKey = getDateKey(date)
-
-      return {
-        date: dateKey,
-        label: `${date.getMonth() + 1}/${date.getDate()}`,
-        count: searchCountByDate[dateKey] || 0,
-      }
-    })
-  }, [searchLogs])
-
-  const maxDailySearchCount = Math.max(
-    ...dailySearchStats.map((item) => item.count),
-    1,
-  )
-
-  const hasDailySearchLogs = dailySearchStats.some(
-    (item) => item.count > 0,
-  )
 
   // 검색 실행
   const handleSearch = (searchKeyword = keyword) => {
@@ -398,7 +342,7 @@ console.log(
         )}
       </section>
 
-      {/* 전체 뉴스 키워드 그래프 */}
+      {/* 전체 뉴스 키워드 TOP 5 */}
       <section className="mt-10 rounded-xl border border-gray-200 bg-white p-6">
         <div>
           <h2 className="text-lg font-bold text-gray-900">
@@ -539,63 +483,6 @@ console.log(
         <p className="mt-6 text-xs text-gray-400">
           ※ 검색할 때마다 기록되며, 같은 검색어도 각각 집계됩니다.
           삭제 버튼을 누르면 해당 검색어의 통계 기록 전체가 삭제됩니다.
-        </p>
-      </section>
-
-      {/* 날짜별 검색량 그래프 */}
-      <section className="mt-10 rounded-xl border border-gray-200 bg-white p-6">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900">
-            날짜별 검색량 변화
-          </h2>
-
-          <p className="mt-2 text-sm text-gray-500">
-            최근 7일 동안의 검색 횟수를 날짜별로 보여줍니다.
-          </p>
-        </div>
-
-        {!hasDailySearchLogs && (
-          <p className="mt-6 rounded-lg bg-gray-50 p-4 text-center text-sm text-gray-500">
-            최근 7일간 검색 기록이 없습니다.
-            검색어를 입력하면 날짜별 검색량이 표시됩니다.
-          </p>
-        )}
-
-        <div className="mt-8 grid grid-cols-7 gap-2">
-          {dailySearchStats.map((item) => {
-            const percentage =
-              (item.count / maxDailySearchCount) * 100
-
-            return (
-              <div
-                key={item.date}
-                className="flex min-w-0 flex-col items-center"
-              >
-                <span className="mb-2 text-xs font-semibold text-gray-600">
-                  {item.count}회
-                </span>
-
-                <div className="flex h-32 w-full items-end justify-center rounded-t-md bg-gray-50">
-                  <div
-                    className="w-full rounded-t-md bg-violet-500 transition-all duration-500"
-                    style={{
-                      height: `${percentage}%`,
-                      minHeight: item.count > 0 ? '4px' : '0px',
-                    }}
-                  />
-                </div>
-
-                <span className="mt-2 text-xs text-gray-500">
-                  {item.label}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-
-        <p className="mt-6 text-xs text-gray-400">
-          ※ 오늘을 포함한 최근 7일의 검색 기록을 집계합니다.
-          검색 기록이 없는 날짜는 0회로 표시됩니다.
         </p>
       </section>
     </main>
